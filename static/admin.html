@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin:0; font-family:system-ui,sans-serif; background:#0d0a1f; color:#fff; }
+.wrap { max-width:820px; margin:0 auto; padding:24px 16px 80px; }
+h1 { font-size:24px; }
+h2 { font-size:15px; color:#a9a3c9; text-transform:uppercase; letter-spacing:1px; margin:26px 0 8px; }
+input, select, textarea, button { font:inherit; border-radius:10px; border:1px solid #333; background:#1a1430; color:#fff; padding:10px 12px; }
+textarea { width:100%; min-height:70px; resize:vertical; }
+input, select { width:100%; }
+button { border:0; background:#6c5ce7; font-weight:600; cursor:pointer; }
+button.secondary { background:transparent; border:1px solid #6c5ce7; color:#8f7fff; }
+button.danger { background:#a33; }
+button.mini { padding:6px 10px; font-size:13px; background:transparent; border:1px solid #444; color:#ccc; }
+label { display:block; margin:10px 0 4px; color:#cfc9ec; font-size:14px; }
+.card { background:#1a1430; border-radius:14px; padding:16px 18px; margin:12px 0; }
+.row { display:flex; gap:12px; flex-wrap:wrap; }
+.row > div { flex:1; min-width:180px; }
+label.opt { display:flex; gap:8px; align-items:center; color:#fff; cursor:pointer; }
+input[type=radio],input[type=checkbox] { width:auto; accent-color:#6c5ce7; }
+.party-card { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; }
+.party-card .t { font-weight:700; font-size:18px; }
+.party-card .d { color:#a9a3c9; font-size:14px; }
+.msg { color:#8f7fff; min-height:1.2em; margin:8px 0; }
+.code { font-family:monospace; background:#2a2145; padding:2px 8px; border-radius:6px; }
+.links a { color:#8f7fff; word-break:break-all; font-size:13px; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+td, th { padding:6px 8px; border-bottom:1px solid #2a2145; text-align:left; }
+#feed { list-style:none; padding:0; }
+#feed li { padding:8px 0; border-bottom:1px solid #2a2145; font-size:15px; }
+#feed .new { color:#4cd137; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const $ = h => { const d = document.createElement('div'); d.innerHTML = h; return d; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api = (path, opts={}) => fetch('/api/admin/' + path, {headers:{'Content-Type':'application/json'}, ...opts})
+  .then(async r => ({ok:r.ok, status:r.status, data:r.status===204?null:await r.json().catch(()=>null)}));
+
+let parties = [];
+
+async function boot() {
+  const r = await api('parties');
+  if (r.status === 401) return renderLogin();
+  parties = r.data || [];
+  renderDash();
+}
+
+// ---------- login ----------
+function renderLogin(msg='') {
+  const app = document.getElementById('app');
+  app.innerHTML = `<h1>Admin</h1><div class="card">
+    <form id="f"><label>Password</label><input type="password" id="pw" autofocus>
+    <button style="margin-top:12px">Log in</button><div class="msg">${esc(msg)}</div></form></div>`;
+  document.getElementById('f').onsubmit = async e => {
+    e.preventDefault();
+    const r = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: document.getElementById('pw').value})});
+    if (r.ok) boot(); else renderLogin('Wrong password.');
+  };
+}
+
+// ---------- dashboard ----------
+function renderDash() {
+  const app = document.getElementById('app');
+  app.innerHTML = `<h1>Parties</h1><button id="new">+ New party</button><div id="plist"></div>
+    <div id="editor"></div>
+    <h2>Live check-ins</h2><div class="card"><ul id="feed"><li style="color:#666">Waiting…</li></ul></div>
+    <button class="mini" id="logout">Log out</button>`;
+  const list = document.getElementById('plist');
+  if (!parties.length) list.innerHTML = '<div class="card" style="color:#888">No parties yet.</div>';
+  for (const p of parties) {
+    const when = new Date(p.startsAt).toLocaleString();
+    list.appendChild($(`<div class="card party-card">
+      <div><div class="t">${esc(p.title)}</div><div class="d">${esc(when)} · ${esc(p.inviteMode)}</div></div>
+      <div class="row" style="flex:unset">
+        <button class="mini edit" data-id="${p.id}">Edit</button>
+        <button class="mini view" data-slug="${p.slug}" data-mode="${p.inviteMode}">View</button>
+        <button class="mini danger del" data-id="${p.id}">Delete</button>
+      </div></div>`));
+    if (location.hash === '#edit-' + p.id) setTimeout(() => renderEditor(p), 0);
+  }
+  document.getElementById('new').onclick = () => renderEditor(null);
+  list.querySelectorAll('.edit').forEach(b => b.onclick = () => renderEditor(parties.find(p => p.id === b.dataset.id)));
+  if (location.hash === '#new') setTimeout(() => renderEditor(null), 0);
+  list.querySelectorAll('.del').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this party?')) return;
+    await api('parties/' + b.dataset.id, {method:'DELETE'});
+    boot();
+  });
+  list.querySelectorAll('.view').forEach(b => b.onclick = () => {
+    if (b.dataset.mode === 'link') alert('Unique links per invitee — copy them from the invitee list in the editor.');
+    else window.open('/p/' + b.dataset.slug, '_blank');
+  });
+  document.getElementById('logout').onclick = () => { document.cookie = 'session=; Max-Age=0; path=/'; location.reload(); };
+  listenFeed();
+}
+
+function listenFeed() {
+  const es = new EventSource('/api/checkins');
+  es.onmessage = e => {
+    const feed = document.getElementById('feed');
+    if (!feed) return;
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="new">●</span> <b>${esc(e.data)}</b> checked in — ${new Date().toLocaleTimeString()}`;
+    feed.prepend(li);
+    chime();
+    notify(e.data);
+  };
+}
+
+function chime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+    o.start(); o.stop(ctx.currentTime + 0.8);
+  } catch (e) {}
+}
+function notify(name) {
+  if (window.Notification && Notification.permission === 'granted')
+    new Notification('Guest arrived', {body: name + ' says: I\'m here!'});
+}
+
+// ---------- editor ----------
+function renderEditor(p) {
+  const isNew = !p;
+  const e = p ? JSON.parse(JSON.stringify(p)) : {
+    title:'', startsAt:new Date(Date.now()+7*864e5).toISOString().slice(0,16), endsAt:'',
+    location:'', generalLocation:'', description:'', headerImage:'', flyerImage:'',
+    inviteMode:'public', password:'', maxAdditionalGuests:0, checkInEnabled:true,
+    guestListPublic:true, locationPublic:true, colorScheme:'midnight', invitees:[]
+  };
+  const app = document.getElementById('editor');
+  const dtLocal = iso => (iso && !iso.startsWith('0001-')) ? new Date(iso).toISOString().slice(0,16) : '';
+  app.innerHTML = `<h1>${isNew ? 'New party' : 'Edit: ' + esc(p.title)}</h1>
+  <div class="card">
+    <label>Title</label><input id="e-title" value="${esc(e.title)}">
+    <div class="row">
+      <div><label>Date &amp; time</label><input id="e-starts" type="datetime-local" value="${dtLocal(e.startsAt)}"></div>
+      <div><label>End (optional)</label><input id="e-ends" type="datetime-local" value="${dtLocal(e.endsAt)}"></div>
+    </div>
+    <label>Description (optional)</label><textarea id="e-desc">${esc(e.description)}</textarea>
+    <div class="row">
+      <div><label>Header image (optional)</label><input type="file" id="e-header" accept="image/*"><div class="links">${e.headerImage ? '<img src="/files/'+esc(e.headerImage)+'" style="max-width:100%;border-radius:8px;margin-top:6px">' : ''}</div></div>
+      <div><label>Flyer image (optional)</label><input type="file" id="e-flyer" accept="image/*"><div class="links">${e.flyerImage ? '<img src="/files/'+esc(e.flyerImage)+'" style="max-width:100%;border-radius:8px;margin-top:6px">' : ''}</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <label>Invite mode</label>
+    <div class="row">
+      <label class="opt"><input type="radio" name="m" value="public" ${e.inviteMode==='public'?'checked':''}> Public link</label>
+      <label class="opt"><input type="radio" name="m" value="password" ${e.inviteMode==='password'?'checked':''}> Shared link + shared password</label>
+      <label class="opt"><input type="radio" name="m" value="passcode" ${e.inviteMode==='passcode'?'checked':''}> Shared link + individual passcodes</label>
+      <label class="opt"><input type="radio" name="m" value="link" ${e.inviteMode==='link'?'checked':''}> Unique link per invitee</label>
+    </div>
+    <div id="pw-row" style="display:none"><label>Password</label><div class="row"><div><input id="e-password" value="${esc(e.password)}"></div><button type="button" class="mini" id="genpw" style="margin-top:10px">Generate</button></div></div>
+    <div id="pc-row" style="display:none">
+      <label>Passcode style</label>
+      <div class="row">
+        <div><select id="e-passStyle">
+          <option value="chars" ${e.passStyle==='chars'?'selected':''}>Random letters, numbers &amp; symbols</option>
+          <option value="digits" ${e.passStyle==='digits'?'selected':''}>Numeric code</option>
+          <option value="words" ${e.passStyle==='words'?'selected':''}>Word passphrase (dashed)</option>
+        </select></div>
+        <div style="max-width:180px"><input id="e-passLen" type="number" min="1" max="64" value="${e.passLen || (e.passStyle==='digits'?4:e.passStyle==='words'?3:8)}" title="Length (characters / digits / words)"></div>
+      </div>
+      <div class="links" id="pc-list"></div>
+    </div>
+    <div id="inv-row" style="display:none">
+      <label id="inv-label">Invitees (one per line: Name)</label><textarea id="e-invitees" placeholder="Alice&#10;Bob &amp; Carol">${esc((e.invitees||[]).map(i=>i.name).join('\n'))}</textarea>
+      <div class="links" id="inv-links"></div>
+    </div>
+    <label style="margin-top:14px">Additional guests</label>
+    <div class="row">
+      <label class="opt"><input type="checkbox" id="e-allowExtra" ${e.maxAdditionalGuests>0?'checked':''}> Allow</label>
+      <div style="max-width:120px"><input id="e-maxExtra" type="number" min="1" value="${e.maxAdditionalGuests||2}" ${e.maxAdditionalGuests>0?'':'disabled'}></div>
+    </div>
+    <label style="margin-top:14px"><label class="opt"><input type="checkbox" id="e-checkin" ${e.checkInEnabled?'checked':''}> Enable "I'm here" check-in button</label></label>
+  </div>
+  <div class="card">
+    <label class="opt"><input type="checkbox" id="e-locPublic" ${e.locationPublic?'checked':''}> Location is public</label>
+    <div id="loc-row"><label>Location</label><input id="e-location" value="${esc(e.location)}"></div>
+    <div id="genloc-row" style="display:none"><label>General location (shown when exact location is hidden)</label><input id="e-genloc" value="${esc(e.generalLocation)}"></div>
+    <label class="opt" style="margin-top:14px"><input type="checkbox" id="e-listPublic" ${e.guestListPublic?'checked':''}> Guest list is public</label>
+    <label style="margin-top:14px">Color scheme</label>
+    <select id="e-color">${['midnight','sunset','mint','candy','mono'].map(c=>`<option value="${c}" ${e.colorScheme===c?'selected':''}>${c}</option>`).join('')}</select>
+  </div>
+  <div class="msg" id="e-msg"></div>
+  <div class="row">
+    <button id="e-save">${isNew ? 'Create' : 'Save'}</button>
+    <button class="secondary" id="e-cancel">Cancel</button>
+    ${!isNew ? `<button class="mini" id="e-cal">Download .ics</button>` : ''}
+  </div>`;
+
+  const mRadios = () => document.querySelector('input[name=m]:checked').value;
+  const syncMode = () => {
+    document.getElementById('pw-row').style.display = mRadios() === 'password' ? '' : 'none';
+    document.getElementById('pc-row').style.display = mRadios() === 'passcode' ? '' : 'none';
+    const needInv = mRadios() === 'link' || mRadios() === 'passcode';
+    document.getElementById('inv-row').style.display = needInv ? '' : 'none';
+    document.getElementById('inv-label').textContent = mRadios() === 'passcode' ? 'Invitees (one per line — each gets their own passcode)' : 'Invitees (one per line: Name)';
+    if (mRadios() === 'passcode') renderPCList();
+    if (mRadios() === 'link') renderInvLinks();
+  };
+  function renderPCList() {
+    const names = document.getElementById('e-invitees').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    if (!names.length) { document.getElementById('pc-list').innerHTML = '<span style="color:#888">Add invitee names below to generate passcodes.</span>'; return; }
+    const rows = names.map(name => {
+      const old = existingByName(name);
+      return `<div style="margin:4px 0"><b>${esc(name)}</b>: <span class="code">${esc(old?.passcode || '(will be generated)')}</span></div>`;
+    });
+    document.getElementById('pc-list').innerHTML = rows.join('');
+  }
+  document.getElementById('e-passStyle').onchange = () => {
+    document.getElementById('e-passLen').value = {chars:8, digits:4, words:3}[document.getElementById('e-passStyle').value];
+  };
+  app.querySelectorAll('input[name=m]').forEach(r => r.onchange = syncMode);
+  document.getElementById('genpw').onclick = () => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = '';
+    for (let i=0;i<6;i++) s += chars[Math.floor(Math.random()*chars.length)];
+    document.getElementById('e-password').value = s;
+  };
+  document.getElementById('e-allowExtra').onchange = ev => document.getElementById('e-maxExtra').disabled = !ev.target.checked;
+  document.getElementById('e-locPublic').onchange = ev => {
+    document.getElementById('loc-row').style.display = ev.target.checked ? '' : 'none';
+    document.getElementById('genloc-row').style.display = ev.target.checked ? 'none' : '';
+  };
+  if (!e.locationPublic) { document.getElementById('e-locPublic').checked = false; document.getElementById('e-locPublic').onchange({target:{checked:false}}); }
+
+  function parseInvitees() {
+    return document.getElementById('e-invitees').value.split('\n').map(s=>s.trim()).filter(Boolean)
+      .map(name => ({name, ...(existingByName(name) || {})}));
+  }
+  function existingByName(name) {
+    if (!p) return null;
+    const found = p.invitees.find(i => i.name.toLowerCase() === name.toLowerCase());
+    return found ? {id: found.id, token: found.token, passcode: found.passcode} : null;
+  }
+  function renderInvLinks() {
+    const names = document.getElementById('e-invitees').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const links = names.map(name => {
+      const old = existingByName(name);
+      const tok = old?.token || '(new)';
+      return `<div>${esc(name)}: <a href="/i/${tok}" target="_blank">${location.origin}/i/${tok}</a></div>`;
+    });
+    document.getElementById('inv-links').innerHTML = links.join('') || '<span style="color:#888">Add names above to get links.</span>';
+  }
+  document.getElementById('e-invitees')?.addEventListener('input', () => { renderInvLinks(); renderPCList(); });
+
+  async function upload(f) {
+    if (!f) return '';
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch('/api/admin/upload', {method:'POST', body:fd});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'upload failed');
+    return j.file;
+  }
+
+  document.getElementById('e-save').onclick = async () => {
+    try {
+      const hdr = document.getElementById('e-header').files[0];
+      const fly = document.getElementById('e-flyer').files[0];
+      const headerImage = await upload(hdr).catch(err => { throw err; }) || e.headerImage;
+      const flyerImage = await upload(fly) || e.flyerImage;
+      const allowExtra = document.getElementById('e-allowExtra').checked;
+      const body = {
+        title: document.getElementById('e-title').value.trim(),
+        startsAt: new Date(document.getElementById('e-starts').value).toISOString(),
+        endsAt: document.getElementById('e-ends').value ? new Date(document.getElementById('e-ends').value).toISOString() : '',
+        description: document.getElementById('e-desc').value,
+        headerImage, flyerImage,
+        inviteMode: mRadios(),
+        password: document.getElementById('e-password').value.trim(),
+        maxAdditionalGuests: allowExtra ? Math.max(1, parseInt(document.getElementById('e-maxExtra').value) || 1) : 0,
+        checkInEnabled: document.getElementById('e-checkin').checked,
+        guestListPublic: document.getElementById('e-listPublic')?.checked ?? true,
+        locationPublic: document.getElementById('e-locPublic').checked,
+        generalLocation: document.getElementById('e-genloc').value,
+        location: document.getElementById('e-location').value,
+        colorScheme: document.getElementById('e-color').value,
+        passStyle: mRadios() === 'passcode' ? document.getElementById('e-passStyle').value : (e.passStyle || ''),
+        passLen: mRadios() === 'passcode' ? (parseInt(document.getElementById('e-passLen').value) || 0) : (e.passLen || 0),
+        invitees: (mRadios() === 'link' || mRadios() === 'passcode') ? parseInvitees() : (p?.invitees || [])
+      };
+      const r = isNew ? await api('parties', {method:'POST', body: JSON.stringify(body)})
+                      : await api('parties/' + p.id, {method:'PUT', body: JSON.stringify(body)});
+      if (!r.ok) throw new Error(r.data?.error || 'save failed');
+      boot();
+    } catch (err) {
+      document.getElementById('e-msg').textContent = err.message;
+    }
+  };
+  document.getElementById('e-cancel').onclick = () => { document.getElementById('editor').innerHTML = ''; };
+  const cal = document.getElementById('e-cal');
+  if (cal) cal.onclick = () => window.open('/calendar/' + (p?.slug || '') + '.ics');
+  syncMode();
+}
+
+boot();
+if (window.Notification && Notification.permission === 'default') Notification.requestPermission();
+</script>
+</body>
+</html>

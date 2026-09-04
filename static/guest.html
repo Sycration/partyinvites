@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Party</title>
+<style>
+* { box-sizing: border-box; }
+body { margin:0; font-family:system-ui, sans-serif; color:var(--fg); background:var(--bg); min-height:100vh; }
+:root, .scheme-midnight { --bg:#0d0a1f; --card:#1a1430; --fg:#fff; --muted:#a9a3c9; --accent:#6c5ce7; --accent-fg:#fff; }
+.scheme-sunset { --bg:#1f0f0a; --card:#33180f; --fg:#fff; --muted:#d8a795; --accent:#ff6b35; --accent-fg:#fff; }
+.scheme-mint { --bg:#eafaf3; --card:#ffffff; --fg:#0b3d2e; --muted:#5c8a76; --accent:#0fa968; --accent-fg:#fff; }
+.scheme-candy { --bg:#fff0f6; --card:#ffffff; --fg:#4a0e2e; --muted:#a86484; --accent:#e64380; --accent-fg:#fff; }
+.scheme-mono { --bg:#111; --card:#1e1e1e; --fg:#f5f5f5; --muted:#999; --accent:#f5f5f5; --accent-fg:#111; }
+.wrap { max-width:640px; margin:0 auto; padding:24px 16px 64px; }
+.header img { width:100%; border-radius:14px; display:block; }
+h1 { margin:18px 0 4px; font-size:28px; }
+.when { color:var(--muted); margin-bottom:14px; }
+.card { background:var(--card); border-radius:14px; padding:16px 18px; margin:14px 0; }
+.loc .addr { font-weight:600; font-size:17px; }
+.general { color:var(--muted); font-size:14px; }
+.flyer img { width:100%; border-radius:14px; }
+h2 { font-size:16px; margin:22px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+input, select, button, textarea { font:inherit; border-radius:10px; border:1px solid var(--muted);
+  padding:10px 12px; background:var(--card); color:var(--fg); }
+button { border:0; background:var(--accent); color:var(--accent-fg); font-weight:600; cursor:pointer; }
+button.secondary { background:transparent; border:1px solid var(--accent); color:var(--accent); }
+input[type=radio], input[type=checkbox] { accent-color: var(--accent); }
+label.opt { display:flex; gap:8px; align-items:center; cursor:pointer; }
+#here {
+  display:block; width:100%; padding:22px; font-size:22px; border-radius:16px;
+  margin:24px 0 8px; animation:pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
+.guests { list-style:none; padding:0; margin:0; }
+.guests li { padding:6px 0; border-bottom:1px solid color-mix(in srgb, var(--muted) 30%, transparent); }
+.msg { color:var(--accent); min-height:1.2em; margin-top:8px; }
+.actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const DATA = __PARTY_DATA__;
+const TOKEN = "__PARTY_TOKEN__";
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = iso => new Date(iso).toLocaleString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit'});
+const qs = p => TOKEN ? p + 'token=' + TOKEN : p;
+const apiHeaders = TOKEN ? {} : {'X-Party-Code': new URLSearchParams(location.search).get('code') || ''};
+
+const isPartyDay = () => {
+  const start = new Date(DATA.startsAt), now = new Date();
+  return now >= start - 12*3600e3 && now <= start + 12*3600e3;
+};
+
+let state = {
+  coming: DATA.rsvp?.coming || false,
+  name: DATA.rsvp?.name || DATA.inviteeName || '',
+  guests: DATA.rsvp?.guests || 0,
+  checkedIn: false
+};
+
+function render() {
+  const app = document.getElementById('app');
+  let html = '';
+  if (DATA.headerImage) html += `<div class="header"><img src="/files/${esc(DATA.headerImage)}" alt=""></div>`;
+  html += `<h1>${esc(DATA.title)}</h1><div class="when">${fmt(DATA.startsAt)}</div>`;
+  if (DATA.description) html += `<div class="card">${esc(DATA.description)}</div>`;
+  if (DATA.location) html += `<div class="card loc"><h2 style="margin-top:0">Where</h2><div class="addr">${esc(DATA.location)}</div>${DATA.generalOnly ? '<div class="general">Exact address is shared closer to the party.</div>' : ''}</div>`;
+  if (DATA.flyerImage) html += `<div class="flyer"><img src="/files/${esc(DATA.flyerImage)}" alt="Flyer"></div>`;
+
+  // RSVP
+  html += `<h2>RSVP</h2><div class="card">
+    <div class="row">
+      <label class="opt"><input type="radio" name="coming" value="yes" ${state.coming ? 'checked' : ''}> I'm coming</label>
+      <label class="opt"><input type="radio" name="coming" value="no" ${DATA.rsvp && DATA.rsvp.name && !state.coming ? 'checked' : ''}> Can't make it</label>
+    </div>
+    <div style="margin-top:12px"><input id="name" placeholder="Your name" value="${esc(state.name)}" style="width:100%"></div>`;
+  if (DATA.maxAdditionalGuests > 0)
+    html += `<div style="margin-top:12px"><label>Additional guests: <input id="guests" type="number" min="0" max="${DATA.maxAdditionalGuests}" value="${state.guests}" style="width:80px"></label></div>`;
+  html += `<button id="rsvpBtn" style="margin-top:12px">Save RSVP</button><div class="msg" id="rsvpMsg"></div></div>`;
+
+  if (DATA.checkInEnabled && isPartyDay())
+    html += `<h2>Check in</h2><button id="here">I'm here</button><div class="msg" id="ciMsg" style="text-align:center"></div>`;
+
+  if (DATA.guestListPublic && DATA.guestList && DATA.guestList.length) {
+    html += `<h2>Who's coming</h2><div class="card"><ul class="guests">` +
+      DATA.guestList.map(g => `<li>${esc(g.name)}${g.guests > 0 ? ` <span style="color:var(--muted)">+${g.guests}</span>` : ''}</li>`).join('') +
+      `</ul></div>`;
+  }
+
+  const calURL = qs(`/calendar/${DATA.slug}.ics`) + (location.search.startsWith('?code=') ? '&code=' + new URLSearchParams(location.search).get('code') : '');
+  html += `<div class="actions">
+    <a href="${calURL}"><button type="button" class="secondary">Add to calendar</button></a>
+  </div>`;
+  app.innerHTML = html;
+  wire();
+}
+
+function wire() {
+  document.getElementById('rsvpBtn').onclick = async () => {
+    state.coming = document.querySelector('input[name=coming]:checked').value === 'yes';
+    state.name = document.getElementById('name').value.trim();
+    const g = document.getElementById('guests');
+    if (g) state.guests = Math.max(0, Math.min(DATA.maxAdditionalGuests, parseInt(g.value) || 0));
+    if (!state.name) { document.getElementById('rsvpMsg').textContent = 'Please enter your name.'; return; }
+    const r = await fetch('/api/rsvp', {method:'POST', headers:{'Content-Type':'application/json', ...apiHeaders},
+      body: JSON.stringify(state)});
+    document.getElementById('rsvpMsg').textContent = r.ok ? 'Saved!' : 'Something went wrong.';
+    if (r.ok) { DATA.rsvp = {...state}; setTimeout(()=>{ try { location.reload(); } catch(e){} }, 600); }
+  };
+  const here = document.getElementById('here');
+  if (here) here.onclick = async () => {
+    const r = await fetch('/api/checkin', {method:'POST', headers:{'Content-Type':'application/json', ...apiHeaders}, body:'{}'});
+    document.getElementById('ciMsg').textContent = r.ok ? "The host knows you're here!" : (await r.json().catch(()=>({}))).error || 'Error.';
+  };
+}
+
+document.body.className = 'scheme-' + (['midnight','sunset','mint','candy','mono'].includes(DATA.colorScheme) ? DATA.colorScheme : 'midnight');
+render();
+</script>
+</body>
+</html>

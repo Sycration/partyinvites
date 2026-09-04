@@ -1,0 +1,7 @@
+# secrets & local data
+config.json
+data/
+
+# build output
+partyinvites
+*.test
