@@ -64,7 +64,10 @@ func loadConfig() (*Config, error) {
 	b, _ := json.MarshalIndent(c, "", "  ")
 	fmt.Printf("About to write config to %s:\n%s\nWrite it? [Y/n] ", path, b)
 	rd := bufio.NewReader(os.Stdin)
-	line, _ := rd.ReadString('\n')
+	line, err := rd.ReadString('\n')
+	if err != nil {
+		return nil, errors.New("input ended; config not written")
+	}
 	line = strings.ToLower(strings.TrimSpace(line))
 	if line == "n" || line == "no" {
 		return nil, errors.New("config not written; exiting")
@@ -92,8 +95,11 @@ func promptConfig() (*Config, error) {
 	pw := ""
 	for {
 		fmt.Print("Set admin password (min 6 chars): ")
-		l, _ := rd.ReadString('\n')
+		l, err := rd.ReadString('\n')
 		pw = strings.TrimSpace(l)
+		if err != nil {
+			return nil, errors.New("input ended before an admin password was set; run interactively or use an existing config")
+		}
 		if len(pw) >= 6 {
 			break
 		}
