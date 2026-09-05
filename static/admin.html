@@ -192,7 +192,7 @@ function renderEditor(p) {
   <div class="card">
     <label class="opt"><input type="checkbox" id="e-locPublic" ${e.locationPublic?'checked':''}> Location is public</label>
     <div id="loc-row"><label>Location</label><input id="e-location" value="${esc(e.location)}"></div>
-    <div id="genloc-row" style="display:none"><label>General location (shown when exact location is hidden)</label><input id="e-genloc" value="${esc(e.generalLocation)}"></div>
+    <div id="genloc-row" style="display:none"><label>General location (optional — shown instead of the exact address)</label><input id="e-genloc" value="${esc(e.generalLocation)}"></div>
     <label class="opt" style="margin-top:14px"><input type="checkbox" id="e-listPublic" ${e.guestListPublic?'checked':''}> Guest list is public</label>
     <label style="margin-top:14px">Color scheme</label>
     <select id="e-color">${['midnight','sunset','mint','candy','mono'].map(c=>`<option value="${c}" ${e.colorScheme===c?'selected':''}>${c}</option>`).join('')}</select>
@@ -234,7 +234,7 @@ function renderEditor(p) {
   };
   document.getElementById('e-allowExtra').onchange = ev => document.getElementById('e-maxExtra').disabled = !ev.target.checked;
   document.getElementById('e-locPublic').onchange = ev => {
-    document.getElementById('loc-row').style.display = ev.target.checked ? '' : 'none';
+    document.getElementById('loc-row').style.display = '';
     document.getElementById('genloc-row').style.display = ev.target.checked ? 'none' : '';
   };
   if (!e.locationPublic) { document.getElementById('e-locPublic').checked = false; document.getElementById('e-locPublic').onchange({target:{checked:false}}); }
@@ -306,6 +306,7 @@ function renderEditor(p) {
   const cal = document.getElementById('e-cal');
   if (cal) cal.onclick = () => window.open('/calendar/' + (p?.slug || '') + '.ics');
   syncMode();
+  document.getElementById('editor').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 boot();
