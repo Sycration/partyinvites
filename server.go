@@ -4,8 +4,10 @@ import (
 	"embed"
 	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 )
 
 //go:embed static
@@ -16,9 +18,33 @@ type Server struct {
 	store    *Store
 	sessions *Sessions
 	hub      *Hub
+	start    time.Time
 }
 
-func (s *Server) routes() *http.ServeMux {
+// statusWriter captures the response code for request logging.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sw := &statusWriter{ResponseWriter: w, status: 200}
+		t0 := time.Now()
+		next.ServeHTTP(sw, r)
+		if strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/files/") {
+			return // skip noisy asset logs
+		}
+		slog.Info("request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr, "status", sw.status, "ms", time.Since(t0).Milliseconds())
+	})
+}
+
+func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 
 	sub, _ := fs.Sub(staticFS, "static")
@@ -49,7 +75,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("/i/", func(w http.ResponseWriter, r *http.Request) {
 		s.serveGuest(w, r, true)
 	})
-	return mux
+	return logRequests(mux)
 }
 
 func servePage(w http.ResponseWriter, name string) {

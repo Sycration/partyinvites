@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -58,6 +59,7 @@ func saveUpload(s *Store, fh multipart.File) (string, error) {
 
 func (s *Server) handleAPIAdmin(w http.ResponseWriter, r *http.Request) {
 	if !s.sessions.check(r) {
+		slog.Warn("unauthorized admin api call", "path", r.URL.Path, "remote", r.RemoteAddr)
 		jsonErr(w, 401, "unauthorized")
 		return
 	}
@@ -89,9 +91,11 @@ func (s *Server) handleAPIPublic(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if bcrypt.CompareHashAndPassword([]byte(s.cfg.AdminHash), []byte(body.Password)) == nil {
+			slog.Info("admin login ok", "remote", r.RemoteAddr)
 			http.SetCookie(w, s.sessions.cookie("admin"))
 			jsonWrite(w, 200, map[string]bool{"ok": true})
 		} else {
+			slog.Warn("admin login failed", "remote", r.RemoteAddr)
 			jsonErr(w, 401, "wrong password")
 		}
 	case "rsvp":
@@ -126,6 +130,7 @@ func (s *Server) apiCreateParty(w http.ResponseWriter, r *http.Request) {
 	s.prepareParty(&p)
 	s.store.parties = append(s.store.parties, &p)
 	s.store.save()
+	slog.Info("party created", "id", p.ID, "slug", p.Slug, "title", p.Title, "mode", p.InviteMode)
 	jsonWrite(w, 200, p)
 }
 
@@ -242,6 +247,7 @@ func (s *Server) apiParty(w http.ResponseWriter, r *http.Request, id string) {
 		s.prepareParty(&np)
 		*p = np
 		s.store.save()
+		slog.Info("party updated", "id", p.ID, "slug", p.Slug)
 		jsonWrite(w, 200, p)
 	case http.MethodDelete:
 		for i, q := range s.store.parties {
@@ -251,6 +257,7 @@ func (s *Server) apiParty(w http.ResponseWriter, r *http.Request, id string) {
 			}
 		}
 		s.store.save()
+		slog.Info("party deleted", "id", id, "slug", p.Slug, "title", p.Title)
 		jsonWrite(w, 200, map[string]bool{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -280,9 +287,11 @@ func (s *Server) apiUpload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	name, err := saveUpload(s.store, file)
 	if err != nil {
+		slog.Warn("upload rejected", "err", err)
 		jsonErr(w, 400, err.Error())
 		return
 	}
+	slog.Info("file uploaded", "file", name)
 	jsonWrite(w, 200, map[string]string{"file": name})
 }
 
@@ -379,6 +388,7 @@ func (s *Server) apiRSVP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.store.save()
+	slog.Info("rsvp", "party", g.party.Slug, "name", name, "coming", body.Coming, "guests", body.Guests)
 	jsonWrite(w, 200, map[string]bool{"ok": true})
 }
 
@@ -413,5 +423,6 @@ func (s *Server) apiCheckIn(w http.ResponseWriter, r *http.Request) {
 	g.invitee.CheckIns = append(g.invitee.CheckIns, now)
 	s.store.save()
 	s.hub.broadcast(g.invitee.Name)
+	slog.Info("check-in", "party", g.party.Slug, "name", g.invitee.Name)
 	jsonWrite(w, 200, map[string]bool{"ok": true})
 }

@@ -28,6 +28,7 @@ type Config struct {
 	DataDir       string `json:"dataDir"`
 	AdminHash     string `json:"adminPasswordHash"`
 	SessionSecret string `json:"sessionSecret"`
+	Logging       bool   `json:"logging"`
 }
 
 func configPath() string {
@@ -88,10 +89,24 @@ func promptConfig() (*Config, error) {
 		}
 		return line
 	}
+	askYN := func(prompt string, def bool) bool {
+		defStr := "Y/n"
+		if !def {
+			defStr = "y/N"
+		}
+		fmt.Printf("%s [%s]: ", prompt, defStr)
+		line, _ := rd.ReadString('\n')
+		line = strings.ToLower(strings.TrimSpace(line))
+		if line == "" {
+			return def
+		}
+		return line == "y" || line == "yes"
+	}
 	c := &Config{}
 	c.Listen = ask("Listen address", ":8080")
 	c.BaseURL = ask("Public base URL", "http://localhost:8080")
 	c.DataDir = ask("Data directory", "data")
+	c.Logging = askYN("Enable logging", true)
 	pw := ""
 	for {
 		fmt.Print("Set admin password (min 6 chars): ")
