@@ -6,6 +6,7 @@
 <title>Party</title>
 <style>
 * { box-sizing: border-box; }
+html { font-size:17px; -webkit-text-size-adjust:100%; }
 body { margin:0; font-family:system-ui, sans-serif; color:var(--fg); background:var(--bg); min-height:100vh; }
 :root, .scheme-midnight { --bg:#0d0a1f; --card:#1a1430; --fg:#fff; --muted:#a9a3c9; --accent:#6c5ce7; --accent-fg:#fff; }
 .scheme-sunset { --bg:#1f0f0a; --card:#33180f; --fg:#fff; --muted:#d8a795; --accent:#ff6b35; --accent-fg:#fff; }
@@ -14,29 +15,36 @@ body { margin:0; font-family:system-ui, sans-serif; color:var(--fg); background:
 .scheme-mono { --bg:#111; --card:#1e1e1e; --fg:#f5f5f5; --muted:#999; --accent:#f5f5f5; --accent-fg:#111; }
 .wrap { max-width:640px; margin:0 auto; padding:24px 16px 64px; }
 .header img { width:100%; border-radius:14px; display:block; }
-h1 { margin:18px 0 4px; font-size:28px; }
-.when { color:var(--muted); margin-bottom:14px; }
+h1 { margin:18px 0 4px; font-size:clamp(24px, 6vw, 32px); }
+.when { color:var(--muted); margin-bottom:14px; font-size:1.05rem; }
 .card { background:var(--card); border-radius:14px; padding:16px 18px; margin:14px 0; }
-.loc .addr { font-weight:600; font-size:17px; }
-.general { color:var(--muted); font-size:14px; }
+.loc .addr { font-weight:600; font-size:1.1rem; }
+.general { color:var(--muted); font-size:0.9rem; }
 .flyer img { width:100%; border-radius:14px; }
-h2 { font-size:16px; margin:22px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+h2 { font-size:1rem; margin:22px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
 .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 input, select, button, textarea { font:inherit; border-radius:10px; border:1px solid var(--muted);
-  padding:10px 12px; background:var(--card); color:var(--fg); }
-button { border:0; background:var(--accent); color:var(--accent-fg); font-weight:600; cursor:pointer; }
+  padding:12px 14px; background:var(--card); color:var(--fg); }
+input, select { min-height:44px; }
+button { border:0; background:var(--accent); color:var(--accent-fg); font-weight:600; cursor:pointer; min-height:44px; }
 button.secondary { background:transparent; border:1px solid var(--accent); color:var(--accent); }
-input[type=radio], input[type=checkbox] { accent-color: var(--accent); }
+input[type=radio], input[type=checkbox] { accent-color: var(--accent); width:20px; height:20px; min-height:0; }
 label.opt { display:flex; gap:8px; align-items:center; cursor:pointer; }
+#name { width:100%; }
 #here {
-  display:block; width:100%; padding:22px; font-size:22px; border-radius:16px;
+  display:block; width:100%; padding:22px; font-size:clamp(20px, 6vw, 26px); border-radius:16px;
   margin:24px 0 8px; animation:pulse 2s infinite;
 }
 @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
 .guests { list-style:none; padding:0; margin:0; }
-.guests li { padding:6px 0; border-bottom:1px solid color-mix(in srgb, var(--muted) 30%, transparent); }
+.guests li { padding:8px 0; border-bottom:1px solid color-mix(in srgb, var(--muted) 30%, transparent); }
 .msg { color:var(--accent); min-height:1.2em; margin-top:8px; }
 .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+.actions button { padding:12px 20px; }
+@media (max-width:480px) {
+  .wrap { padding:16px 12px 48px; }
+  .card { padding:14px; }
+}
 </style>
 </head>
 <body>
