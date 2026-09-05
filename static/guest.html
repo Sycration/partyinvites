@@ -48,6 +48,7 @@ const TOKEN = "__PARTY_TOKEN__";
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = iso => new Date(iso).toLocaleString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric', hour:'numeric', minute:'2-digit'});
 const qs = p => TOKEN ? p + 'token=' + TOKEN : p;
+const apiQS = () => TOKEN ? 'token=' + TOKEN : 'party=' + encodeURIComponent(DATA.slug);
 const apiHeaders = TOKEN ? {} : {'X-Party-Code': new URLSearchParams(location.search).get('code') || ''};
 
 const isPartyDay = () => {
@@ -106,14 +107,14 @@ function wire() {
     const g = document.getElementById('guests');
     if (g) state.guests = Math.max(0, Math.min(DATA.maxAdditionalGuests, parseInt(g.value) || 0));
     if (!state.name) { document.getElementById('rsvpMsg').textContent = 'Please enter your name.'; return; }
-    const r = await fetch('/api/rsvp', {method:'POST', headers:{'Content-Type':'application/json', ...apiHeaders},
+    const r = await fetch('/api/rsvp?' + apiQS(), {method:'POST', headers:{'Content-Type':'application/json', ...apiHeaders},
       body: JSON.stringify(state)});
     document.getElementById('rsvpMsg').textContent = r.ok ? 'Saved!' : 'Something went wrong.';
     if (r.ok) { DATA.rsvp = {...state}; setTimeout(()=>{ try { location.reload(); } catch(e){} }, 600); }
   };
   const here = document.getElementById('here');
   if (here) here.onclick = async () => {
-    const r = await fetch('/api/checkin', {method:'POST', headers:{'Content-Type':'application/json', ...apiHeaders}, body:'{}'});
+    const r = await fetch('/api/checkin?' + apiQS(), {method:'POST', headers:{'Content-Type':'application/json', ...apiHeaders}, body:'{}'});
     document.getElementById('ciMsg').textContent = r.ok ? "The host knows you're here!" : (await r.json().catch(()=>({}))).error || 'Error.';
   };
 }
