@@ -313,6 +313,8 @@ function renderEditor(p) {
   const cal = document.getElementById('e-cal');
   if (cal) cal.onclick = () => window.open('/calendar/' + (p?.slug || '') + '.ics');
   syncMode();
+  renderInvLinks();
+  renderPCList();
   document.getElementById('editor').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
