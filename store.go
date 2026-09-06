@@ -140,6 +140,37 @@ type RSVP struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// NullTime is a time.Time that unmarshals empty/absent JSON strings as the zero time.
+type NullTime time.Time
+
+func (t NullTime) MarshalJSON() ([]byte, error) {
+	tt := time.Time(t)
+	if tt.IsZero() {
+		return []byte(`""`), nil
+	}
+	return json.Marshal(tt)
+}
+
+func (t *NullTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		*t = NullTime(time.Time{})
+		return nil
+	}
+	tt, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		// tolerate missing timezone
+		tt, err = time.Parse("2006-01-02T15:04:05", s)
+		if err != nil {
+			return err
+		}
+	}
+	*t = NullTime(tt)
+	return nil
+}
+
+func (t NullTime) Time() time.Time { return time.Time(t) }
+
 type Invitee struct {
 	ID       string      `json:"id"`
 	Name     string      `json:"name"`
@@ -154,7 +185,7 @@ type Party struct {
 	Slug                string    `json:"slug"`
 	Title               string    `json:"title"`
 	StartsAt            time.Time `json:"startsAt"`
-	EndsAt              time.Time `json:"endsAt,omitempty"`
+	EndsAt              NullTime  `json:"endsAt,omitempty"`
 	Location            string    `json:"location"`
 	GeneralLocation     string    `json:"generalLocation,omitempty"`
 	Description         string    `json:"description,omitempty"`

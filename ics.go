@@ -27,7 +27,7 @@ func buildICS(p *Party, inviteeName string) string {
 	fmt.Fprintf(&b, "UID:%s\r\n", icsUID(p))
 	b.WriteString("DTSTAMP:" + icsTime(time.Now()) + "\r\n")
 	b.WriteString("DTSTART:" + icsTime(p.StartsAt) + "\r\n")
-	end := p.EndsAt
+	end := p.EndsAt.Time()
 	if end.IsZero() || !end.After(p.StartsAt) {
 		end = p.StartsAt.Add(3 * time.Hour)
 	}
